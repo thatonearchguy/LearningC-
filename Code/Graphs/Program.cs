@@ -1,62 +1,57 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Graphs
 {
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            Console.WriteLine("Hello World!");
-        }
-    }
     public class Graph <T>
     {
-        private class AdjacencyMatrix <T>
+        private class AdjacencyMatrix
         {
-            private List<List<T>> matrix {get;}
+            internal List<List<int>> matrix {get;}
             internal List<T> header; 
             internal int Count;
-            public AdjacencyMatrix(List<Tuple<T,T,T>> values)
+            public AdjacencyMatrix(List<Tuple<T,T,int>> values)
             {
                 //1st value - First item | 2nd value - Second item | 3rd item - weight
-                foreach(var tuple in values) header.Add(tuple[0]);
-                header = header.Distinct();
+                foreach(var tuple in values) header.Add(tuple.Item1);
+                header = header.Distinct().ToList();
                 header.Sort();
-                Count = header.Length;
-                matrix = new List<List<T>>();
+                Count = header.Count();
+                matrix = new List<List<int>>();
                 for(int i = 0; i < header.Count; i ++)
                 {
-                    matrix[i] = new List<T> (new T[header.Count]);
+                    matrix[i] = new List<int> (new int[header.Count]);
                 }
                 foreach(var tuple in values)
                 {
-                    matrix[GetIndex(tuple[0])][GetIndex(tuple[1])] = tuple[2];
+                    matrix[GetIndex(tuple.Item1)][GetIndex(tuple.Item2)] = tuple.Item3;
                 }
             }
-            private void GetIndex(T value)
+            internal int GetIndex(T value)
             {
-                return header.FindIndex(a => a == value);
+                return header.FindIndex(a => a.Equals(value)==true);
             }
-            internal void AddNode(T newNode, List<Tuple<T, T, T>> adjacencies)
+            internal void AddNode(T newNode, List<Tuple<T, T, int>> adjacencies)
             {
                 //Tuple 1st value = start, 2nd value = end, 3rd value = weight
-                header.Add(value);
+                header.Add(newNode);
                 header.Sort();
-                Count = header.Length;
+                Count = header.Count();
                 var NodeIndex = GetIndex(newNode);
-                matrix.Insert(NodeIndex, new List<T> (new T[header.Count]));
+                matrix.Insert(NodeIndex, new List<int> (new int[header.Count]));
                 foreach(var list in matrix)
                 {
                     list.Insert(NodeIndex, 0);
                 }
                 foreach(var link in adjacencies)
                 {
-                    if(link[0] != newNode && link[1] != newNode) throw new InvalidOperationException();
+                    if(link.Item1.Equals(newNode) == false && link.Item1.Equals(newNode) == false) throw new InvalidOperationException();
                     else
                     {
                         try
                         {
-                            matrix[GetIndex(link[0])][GetIndex(link[1])] = link[2];
+                            matrix[GetIndex(link.Item1)][GetIndex(link.Item2)] = link.Item3;
                         }
                         catch {}
                     }
@@ -71,29 +66,113 @@ namespace Graphs
                     list.RemoveAt(toRemoveIndex);
                 }
                 header.RemoveAt(toRemoveIndex);
-                Count = header.Length;
+                Count = header.Count();
+            }
+            internal List<int> GetVertices(T toFind)
+            {
+                var adjacencies = matrix[GetIndex(toFind)];
+                var output = new List<int>();
+                for(int i = 0; i < adjacencies.Count(); i ++)
+                {
+                    if(adjacencies[i] > 0) output.Add(i);
+                }
+                return output;
+            }
+            internal List<int> GetWeights(T toFind)
+            {
+                var adjacencies = matrix[GetIndex(toFind)];
+                var output = new List<int>();
+                for(int i = 0; i < adjacencies.Count(); i ++)
+                {
+                    if(adjacencies[i] > 0) output.Add(adjacencies[i]);
+                }
+                return output;
             }
         }
         private AdjacencyMatrix GraphMatrix;
-        private List<T> GetVertices(T toFind)
-        {
-            output = matrix[GetIndex(toFind)].Select(x=>x>0).ToList();
-            return output;
-        }
-        public Graph(List<Tuple<T,T,T> inputs)
+        public Graph(List<Tuple<T,T,int>> inputs)
         {
             GraphMatrix = new AdjacencyMatrix(inputs);
         }
-        public List<int> BreadthFirst()
+        
+        
+        public List<T> BreadthFirst()
         {
-            var visited = new List<bool> (new bool[header.Count()]);
+            var output = new List<T>();
+            var visited = new List<bool> (new bool[GraphMatrix.Count]);
             var workQueue = new Queue<T>();
-            while(visited.Count(x=>x==True)!=header.Count());
+            workQueue.Enqueue(GraphMatrix.header[0]);
+            while(workQueue.Count != 0)
+            {
+                var toVisit = workQueue.Dequeue();
+                var neighbours = GraphMatrix.GetVertices(toVisit);
+                foreach(var neighbour in neighbours)
+                {
+                    if(visited[neighbour] == false)
+                    {
+                        workQueue.Enqueue(GraphMatrix.header[neighbour]);
+                        visited[neighbour] = true;
+                        output.Add(GraphMatrix.header[neighbour]);
+                    }
+                }
+            }
+            return output;
         }
-        public void AddElement(T value)
+        public void DepthFirstHelper(T value, List<bool> visited, List<T> output)
         {
-            GraphMatrix.AddNode(value);
-            
+            visited[GraphMatrix.GetIndex(value)] = true;
+            var neighbours = GraphMatrix.GetVertices(value);
+            foreach(var neighbour in neighbours)
+            {
+                if(visited[neighbour] == false)
+                {
+                    DepthFirstHelper(GraphMatrix.header[neighbour], visited, output);
+                }
+            }
+        }
+        public List<T> DepthFirst(T value)
+        {
+            var output = new List<T>();
+            var visited = new List<bool> (new bool[GraphMatrix.Count]);
+            DepthFirstHelper(value, visited, output);
+            return output;
+        }
+        public List<T> Dijkstra(T startNode)
+        {
+            var distances = new List<int> (new int[GraphMatrix.Count]);
+            var previous = new List<T> (new T[GraphMatrix.Count]);
+            for(int i = 0; i < GraphMatrix.Count; i ++)
+            {
+                distances[i] = int.MaxValue;
+                previous[i] = default(T);
+            }
+            distances[GraphMatrix.GetIndex(startNode)] = 0;
+            var nodes = GraphMatrix.header;
+            while(nodes.Count() != 0)
+            {
+                var toVisit = nodes[distances.FindIndex(x=>x==distances.Min())];
+                nodes.Remove(toVisit);
+                var nodeDistances = GraphMatrix.GetWeights(toVisit);
+                var neighbours = GraphMatrix.GetVertices(toVisit);
+                for(int i = 0; i < GraphMatrix.Count; i ++)
+                {
+                    var alt = distances[GraphMatrix.GetIndex(toVisit)] + nodeDistances[i];
+                    if(alt < distances[neighbours[i]])
+                    {
+                        distances[neighbours[i]] = alt;
+                        previous[neighbours[i]] = toVisit;
+                    }
+                }
+            }
+            return previous;
+        }
+        public void AddElement(T value, List<Tuple<T,T,int>> adjacencies)
+        {
+            GraphMatrix.AddNode(value, adjacencies);
+        }
+        public void RemoveElement(T value)
+        {
+            GraphMatrix.RemoveNode(value);
         }
 
     }
